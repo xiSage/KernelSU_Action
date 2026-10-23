@@ -300,6 +300,39 @@ hide_stuff_apply() {
 	endgroup
 }
 
+# Verify that every hook entry point the KernelSU tree will call at link time
+# actually landed in the kernel sources.
+#
+# This matters because apply_patch() accepts a fuzzy application, and a hunk
+# that lands in the wrong function still applies cleanly while the symbol it
+# was supposed to reference never gets inserted. ReSukiSU's own Kbuild then
+# aborts much later with "You lost ksu_handle_* hook in your kernel", easily
+# twenty minutes into a CI run.
+ksu_hooks_verify() {
+	local variant=${KSU_VARIANT:-none}
+	[ "$variant" = "resukisu" ] || [ "$variant" = "sukisu-ultra" ] || return 0
+
+	local missing=()
+	local pair sym file
+	for pair in \
+		ksu_handle_execveat:fs/exec.c \
+		ksu_handle_faccessat:fs/open.c \
+		ksu_handle_stat:fs/stat.c \
+		ksu_handle_newfstat_ret:fs/stat.c \
+		ksu_handle_fstat64_ret:fs/stat.c \
+		ksu_handle_sys_reboot:kernel/reboot.c; do
+		sym=${pair%%:*}; file=${pair#*:}
+		grep -q "$sym" "${KERNEL_DIR}/${file}" || missing+=("${sym} in ${file}")
+	done
+
+	if [ ${#missing[@]} -gt 0 ]; then
+		die "manual hook patch applied but these hooks are missing:
+       $(printf '%s\n       ' "${missing[@]}")
+       Set KSU_HOOK_MODE=kprobes, or fix the patch for kernel $(kernel_version "$KERNEL_DIR")."
+	fi
+	ok "all 6 manual hook entry points are present in the kernel sources"
+}
+
 # Manual/syscall hook patches for pre-GKI trees, used when the fork expects the
 # hooks to already exist in the kernel source rather than hooking via kprobes.
 hooks_patch_apply() {
@@ -315,7 +348,10 @@ hooks_patch_apply() {
 			https://github.com/ReSukiSU/ReSukiSU_Patches.git "$dir" || true
 		local p="${dir}/scope-minimized/kernel-${kver}.patch"
 		if [ -f "$p" ]; then
-			( cd "$KERNEL_DIR" && apply_patch "$p" 1 ) && { endgroup; return 0; }
+			if ( cd "$KERNEL_DIR" && apply_patch "$p" 1 ); then
+				ksu_hooks_verify
+				endgroup; return 0
+			fi
 		else
 			info "ReSukiSU ships no scope-minimized patch for kernel ${kver}"
 		fi
@@ -327,7 +363,10 @@ hooks_patch_apply() {
 		dir=$(sukisu_patch_dir)
 		for p in "${dir}/${kver}/"*hook*.patch "${dir}/hooks/syscall_hooks.patch"; do
 			[ -f "$p" ] || continue
-			if ( cd "$KERNEL_DIR" && apply_patch "$p" 1 ); then endgroup; return 0; fi
+			if ( cd "$KERNEL_DIR" && apply_patch "$p" 1 ); then
+				ksu_hooks_verify
+				endgroup; return 0
+			fi
 		done
 	fi
 
@@ -335,6 +374,7 @@ hooks_patch_apply() {
 	# historically and still works for the 4.9-5.4 KernelSU 0.9.x hook API.
 	info "falling back to the bundled legacy hook script"
 	( cd "$KERNEL_DIR" && bash "${REPO_ROOT}/patches/legacy_ksu_hooks.sh" )
+	ksu_hooks_verify
 	endgroup
 }
 
