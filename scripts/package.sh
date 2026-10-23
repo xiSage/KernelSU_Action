@@ -38,7 +38,10 @@ make_anykernel3() {
 		# ro.product.device, and the zip is flashed deliberately by its builder.
 		sed -i 's/do.devicecheck=1/do.devicecheck=0/g' "${AK3}/anykernel.sh"
 		sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' "${AK3}/anykernel.sh"
-		sed -i 's/IS_SLOT_DEVICE=0;/is_slot_device=auto;/g' "${AK3}/anykernel.sh"
+		# ak3-core.sh reads IS_SLOT_DEVICE (upper case only); a lower-case
+		# name silently disables slot detection, so an A/B device then fails
+		# with "Unable to determine auto partition".
+		sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/g' "${AK3}/anykernel.sh"
 	fi
 
 	cp "${BOOT_OUT}/${KERNEL_IMAGE_NAME}" "${AK3}/" \
