@@ -16,6 +16,12 @@ OUT="${KERNEL_DIR}/out"
 
 DEFCONFIG_PATH="${KERNEL_DIR}/arch/${ARCH}/configs/${KERNEL_CONFIG}"
 
+# Extra config fragments, space separated, relative to arch/$ARCH/configs.
+# Kbuild's own "%.config" rule merges each one into .config on top of the
+# defconfig already generated, so these are passed as additional make targets
+# rather than being concatenated by hand.
+CONFIG_FRAGMENTS=${KERNEL_CONFIG_FRAGMENTS:-}
+
 # ------------------------------------------------------------- defconfig ---
 
 prepare_defconfig() {
@@ -136,6 +142,25 @@ build_kernel() {
 	# shellcheck disable=SC2086
 	make -j"$(nproc --all)" CC=clang $args "${KERNEL_CONFIG}" \
 		|| die "defconfig generation failed"
+
+	# Merge the device's extra fragments on top of the generated .config. The
+	# tree's own "%.config" target runs merge_config.sh and then olddefconfig,
+	# so a fragment value that loses to a dependency is reported instead of
+	# silently vanishing. Device trees that ship fragments (for example
+	# oneplus sm8250's "vendor/kona-perf_defconfig vendor/oplus.config") rely
+	# on this: without the second file the charger driver builds against the
+	# wrong struct definitions and fails with -Werror.
+	if [ -n "$CONFIG_FRAGMENTS" ]; then
+		local frag
+		for frag in $CONFIG_FRAGMENTS; do
+			[ -f "${KERNEL_DIR}/arch/${ARCH}/configs/${frag}" ] \
+				|| die "config fragment not found: arch/${ARCH}/configs/${frag}"
+			info "make ${args} ${frag}"
+			# shellcheck disable=SC2086
+			make -j"$(nproc --all)" CC=clang $args "$frag" \
+				|| die "merging config fragment '${frag}' failed"
+		done
+	fi
 
 	info "make ${args}"
 	# shellcheck disable=SC2086

@@ -25,6 +25,7 @@ declare -A DEFAULTS=(
 	[KERNEL_SOURCE]=""
 	[KERNEL_SOURCE_BRANCH]=""
 	[KERNEL_CONFIG]=""
+	[KERNEL_CONFIG_FRAGMENTS]=""
 	[KERNEL_IMAGE_NAME]="Image.gz-dtb"
 	[ARCH]="arm64"
 	[KERNEL_NAME]=""
@@ -187,6 +188,15 @@ validate() {
 	[ -n "${CFG[KERNEL_SOURCE_BRANCH]}" ] || _err "KERNEL_SOURCE_BRANCH is required"
 	[ -n "${CFG[KERNEL_CONFIG]}" ]        || _err "KERNEL_CONFIG is required"
 	[ -n "${CFG[KERNEL_IMAGE_NAME]}" ]    || _err "KERNEL_IMAGE_NAME is required"
+
+	# Fragments are names relative to arch/$ARCH/configs, e.g. "vendor/oplus.config".
+	local frag
+	for frag in ${CFG[KERNEL_CONFIG_FRAGMENTS]}; do
+		case "$frag" in
+			*/*.config) ;;
+			*) _err "KERNEL_CONFIG_FRAGMENTS entry '${frag}' must look like 'vendor/name.config'" ;;
+		esac
+	done
 
 	case "${CFG[ARCH]}" in
 		arm64 | arm | x86_64 | riscv) ;;

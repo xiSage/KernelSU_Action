@@ -116,6 +116,7 @@ AOSP 的 clang 预编译仓库有个陷阱：每个 `kernel-build` 分支都会�
 | 选项 | 说明 |
 | --- | --- |
 | `KERNEL_IMAGE_NAME` | 需要刷写的内核二进制名，与设备树里的 `BOARD_KERNEL_IMAGE_NAME` 一致，常见 `Image.gz-dtb` / `Image.gz` / `Image` |
+| `KERNEL_CONFIG_FRAGMENTS` | 在 `KERNEL_CONFIG` 之上叠加的配置片段，空格分隔，路径相对 `arch/$ARCH/configs`。设备树里 `TARGET_KERNEL_CONFIG` 列出多个文件时，这里要照抄后面的那几个 |
 | `EXTRA_CMDS` / `CUSTOM_CMDS` | 追加到每次 `make` 的参数，值里可以带 `=` |
 | `USE_LLVM` | 全 LLVM 构建（`LLVM=1 LLVM_IAS=1`），适合 5.10+ |
 | `ADD_OVERLAYFS_CONFIG` | 为 KernelSU 模块与 system 读写提供支持 |
@@ -167,6 +168,7 @@ patches/
 | KernelSU 装上了但 su 无反应 | 旧内核的 kprobes 不可靠，改 `KSU_HOOK_MODE=manual` |
 | 模块挂载卸载不掉 | 5.9 以下内核需要 `ENABLE_PATH_UMOUNT=true` |
 | 找不到 defconfig | `KERNEL_CONFIG` 写错，日志会列出可用的 defconfig |
+| 驱动报 `incomplete definition of type 'struct xxx'` / `-Wvisibility` | 少合并了设备树里的配置片段，把 `TARGET_KERNEL_CONFIG` 中除 defconfig 之外的文件补进 `KERNEL_CONFIG_FRAGMENTS` |
 
 ## 感谢
 
